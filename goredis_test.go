@@ -1,17 +1,13 @@
-# Golang Redis strong tool
+package goredis
 
-## How to use
+import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+)
 
-Simple：
-
-```
-go get -v github.com/hunterhug/goredis
-```
-
-Demo:
-
-```go
-func main() {
+func TestNew(t *testing.T) {
 	client, err := New(&Config{
 		Addr:            "127.0.0.1:6379",
 		Password:        "",
@@ -57,4 +53,3 @@ func main() {
 
 	fmt.Println(duration)
 }
-```
