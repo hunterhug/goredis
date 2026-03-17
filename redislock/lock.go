@@ -14,6 +14,10 @@ var (
 	Log = golog.New()
 )
 
+func init() {
+	Log.InitLogger()
+}
+
 type LockInter interface {
 	// Lock 加锁
 	Lock(ctx context.Context) error

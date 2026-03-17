@@ -14,6 +14,10 @@ var (
 	Log = golog.New()
 )
 
+func init() {
+	Log.InitLogger()
+}
+
 type Timer struct {
 	Cli          redis.Cmdable
 	service      string
