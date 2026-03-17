@@ -11,53 +11,57 @@ import (
 )
 
 func TestLock(t *testing.T) {
+	Log.SetLevel(golog.DebugLevel)
+	Log.InitLogger()
 	ctx := context.Background()
 	redisClient, err := goredis.New(nil)
 	if err != nil {
-		golog.ErrorContext(ctx, "NewRedisUrl err: %s", err.Error())
-		return
-	}
-	
-	lock := New(
-		ctx, redisClient,
-		WithAutoRenew(),
-		WithKeyPrefix("/locks/xx"),
-		WithKey(fmt.Sprintf("package-xx")),
-		WithTimeout(time.Duration(50)*time.Second))
-	err = lock.Lock(ctx)
-	if err != nil {
-		golog.ErrorContext(ctx, "Lock err: %s", err.Error())
+		Log.ErrorContext(ctx, "NewRedisUrl err: %s", err.Error())
 		return
 	}
 
-	time.Sleep(time.Duration(100) * time.Second)
+	lock := New(
+		ctx, redisClient,
+		WithAutoRenew(),
+		WithKeyPrefix("/locks/xx2"),
+		WithKey(fmt.Sprintf("package-xx")),
+		WithTimeout(time.Duration(5)*time.Second))
+	err = lock.Lock(ctx)
+	if err != nil {
+		Log.ErrorContext(ctx, "Lock err: %s", err.Error())
+		return
+	}
+
+	time.Sleep(time.Duration(10) * time.Second)
 	defer func(lock LockInter) {
 		err := lock.UnLock(ctx)
 		if err != nil {
-			golog.ErrorContext(ctx, "UnLock err: %s", err.Error())
+			Log.ErrorContext(ctx, "UnLock err: %s", err.Error())
 		}
 	}(lock)
 
 	time.Sleep(time.Duration(5) * time.Second)
-	golog.InfoContext(ctx, "Lock success")
+	Log.InfoContext(ctx, "Lock success")
 }
 
 func TestLock2(t *testing.T) {
+	Log.SetLevel(golog.DebugLevel)
+	Log.InitLogger()
 	ctx := context.Background()
 	redisClient, err := goredis.New(nil)
 	if err != nil {
-		golog.ErrorContext(ctx, "NewRedisUrl err: %s", err.Error())
+		Log.ErrorContext(ctx, "NewRedisUrl err: %s", err.Error())
 		return
 	}
 	lock := New(
 		ctx, redisClient,
 		WithAutoRenew(),
-		WithKeyPrefix("/locks/xx"),
+		WithKeyPrefix("/locks/xx2"),
 		WithKey(fmt.Sprintf("package-xx")),
 		WithTimeout(time.Duration(50)*time.Second))
-	err = lock.Lock(ctx)
+	err = lock.SpinLock(ctx, 10*time.Second)
 	if err != nil {
-		golog.ErrorContext(ctx, "Lock err: %s", err.Error())
+		Log.ErrorContext(ctx, "Lock err: %s", err.Error())
 		return
 	}
 
@@ -65,10 +69,10 @@ func TestLock2(t *testing.T) {
 	defer func(lock LockInter) {
 		err := lock.UnLock(ctx)
 		if err != nil {
-			golog.ErrorContext(ctx, "UnLock err: %s", err.Error())
+			Log.ErrorContext(ctx, "UnLock err: %s", err.Error())
 		}
 	}(lock)
 
 	time.Sleep(time.Duration(5) * time.Second)
-	golog.InfoContext(ctx, "Lock success")
+	Log.InfoContext(ctx, "Lock success")
 }

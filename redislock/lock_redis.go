@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -35,8 +34,8 @@ func (lock *RedisLock) Lock(ctx context.Context) error {
 	if result != nil && result == "OK" {
 		span.SetAttributes(attribute.String("result", result.(string)))
 	} else {
-		span.SetAttributes(attribute.String("result", "lock acquisition failed"))
-		return errors.New("lock acquisition failed")
+		span.SetAttributes(attribute.String("result", fmt.Sprintf("lock acquisition failed: %v", result)))
+		return errors.New(fmt.Sprintf("lock acquisition failed: %v", result))
 	}
 
 	if lock.isAutoRenew {
@@ -70,8 +69,8 @@ func (lock *RedisLock) UnLock(ctx context.Context) error {
 	if result != nil && result == "OK" {
 		span.SetAttributes(attribute.String("result", result.(string)))
 	} else {
-		span.SetAttributes(attribute.String("result", "lock release failed"))
-		return errors.New("lock release failed")
+		span.SetAttributes(attribute.String("result", fmt.Sprintf("lock release failed: %v", result)))
+		return errors.New(fmt.Sprintf("lock release failed: %v", result))
 	}
 
 	return nil
@@ -104,8 +103,11 @@ func (lock *RedisLock) SpinLock(ctx context.Context, timeout time.Duration) erro
 		// 如果加锁失败，则休眠一段时间再尝试
 		select {
 		case <-lock.Context.Done():
+			Log.DebugContext(ctx, "spin lock done, err: %v", lock.Context.Err())
 			return lock.Context.Err() // 处理取消操作
 		case <-time.After(100 * time.Millisecond):
+			// 自旋锁可加指数回避
+			Log.DebugContext(ctx, "spin lock retrying...")
 			// 继续尝试下一轮加锁
 		}
 	}
@@ -134,8 +136,8 @@ func (lock *RedisLock) Renew(ctx context.Context) error {
 	if result != nil && result == "OK" {
 		span.SetAttributes(attribute.String("result", result.(string)))
 	} else {
-		span.SetAttributes(attribute.String("result", "lock renewal failed"))
-		return errors.New("lock renewal failed")
+		span.SetAttributes(attribute.String("result", fmt.Sprintf("lock renewal failed: %v", result)))
+		return errors.New(fmt.Sprintf("lock renewal failed: %v", result))
 	}
 
 	return nil
@@ -143,7 +145,14 @@ func (lock *RedisLock) Renew(ctx context.Context) error {
 
 // 锁自动续期
 func (lock *RedisLock) autoRenew(ctx context.Context) {
-	ticker := time.NewTicker(lock.lockTimeout / 2)
+	timeRenewCal := lock.lockTimeout / 3
+	Log.DebugContext(ctx, "autoRenew timeRenewCal: %v", timeRenewCal)
+	if timeRenewCal < 200*time.Millisecond {
+		timeRenewCal = 200 * time.Millisecond
+	}
+
+	ticker := time.NewTicker(timeRenewCal)
+
 	defer ticker.Stop()
 
 	for {
@@ -151,9 +160,10 @@ func (lock *RedisLock) autoRenew(ctx context.Context) {
 		case <-lock.autoRenewCtx.Done():
 			return
 		case <-ticker.C:
+			Log.DebugContext(ctx, "autoRenewing...")
 			err := lock.Renew(ctx)
 			if err != nil {
-				log.Println("autoRenew failed:", err)
+				Log.DebugContext(ctx, "autoRenew failed: %s", err.Error())
 				return
 			}
 		}

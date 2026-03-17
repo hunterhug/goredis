@@ -23,7 +23,7 @@ const (
 			return "OK"
 		end
 		
-		return nil
+		return "NOTOK"
 	`
 
 	// 解锁
@@ -46,7 +46,7 @@ const (
 			redis.call('DEL', lock_key)
 			return "OK"
 		else
-			return nil
+			return "NOTOK"
 		end
 	`
 
@@ -64,6 +64,6 @@ const (
 			return "OK"
 		end
 		
-		return nil
+		return "NOTOK"
 	`
 )

@@ -6,7 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hunterhug/golog/v2"
 	"github.com/redis/go-redis/v9"
+)
+
+var (
+	Log = golog.New()
 )
 
 type LockInter interface {

@@ -3,10 +3,15 @@ package timerlib
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/hunterhug/golog/v2"
 	"github.com/redis/go-redis/v9"
+)
+
+var (
+	Log = golog.New()
 )
 
 type Timer struct {
@@ -19,6 +24,8 @@ type Timer struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	taskInterval time.Duration
+	lock         sync.Mutex
+	hasBeenRun   bool
 }
 
 func New(redisClient redis.UniversalClient, service string, lockTTL time.Duration, taskInterval time.Duration, task func()) *Timer {
@@ -44,21 +51,32 @@ func New(redisClient redis.UniversalClient, service string, lockTTL time.Duratio
 		task:         task,
 		ctx:          ctx,
 		cancel:       cancel,
+		hasBeenRun:   false,
+		lock:         sync.Mutex{},
 	}
 }
 
 func (t *Timer) Run() error {
+	t.lock.Lock()
+	if t.hasBeenRun {
+		t.lock.Unlock()
+		return fmt.Errorf("timer has been run")
+	}
+	t.hasBeenRun = true
+	t.lock.Unlock()
+
 	client := t.Cli
 	lockKey := fmt.Sprintf("timer:lock:%s", t.service)
-	heartbeat := time.NewTicker(t.lockTTL / 3)
-	defer heartbeat.Stop()
 
 	// 立即尝试获取锁
 	if ok, _ := client.SetNX(t.ctx, lockKey, t.instance, t.lockTTL).Result(); ok {
-		golog.Debugf("get lock: %s", lockKey)
+		Log.Debugf("get lock: %s", lockKey)
 		t.isRunning = true
 		go t.runTask()
 	}
+
+	heartbeat := time.NewTicker(t.lockTTL / 3)
+	defer heartbeat.Stop()
 
 	for {
 		select {
@@ -68,16 +86,16 @@ func (t *Timer) Run() error {
 			if t.isRunning {
 				// 续期
 				if current, _ := client.Get(t.ctx, lockKey).Result(); current != t.instance {
-					golog.Debugf("lock: %s change isRunning=false", lockKey)
+					Log.Debugf("lock: %s change isRunning=false", lockKey)
 					t.isRunning = false
 				} else {
-					golog.Debugf("lock: %s refresh ttl", lockKey)
+					Log.Debugf("lock: %s refresh ttl", lockKey)
 					client.Expire(t.ctx, lockKey, t.lockTTL)
 				}
 			} else {
 				// 尝试获取锁
 				if ok, _ := client.SetNX(t.ctx, lockKey, t.instance, t.lockTTL).Result(); ok {
-					golog.Debugf("get lock: %s again", lockKey)
+					Log.Debugf("get lock: %s again", lockKey)
 					t.isRunning = true
 					go t.runTask()
 				}
